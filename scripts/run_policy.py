@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import argparse
 import numpy as np
@@ -12,12 +13,13 @@ from planner.rrt_core import in_goal, get_qpos_indices, get_qvel_indices, get_ct
 
 
 DEBUG_START_POSE = np.array([0, 0.2])
+DEFAULT_POLICY_PATH = os.path.join(os.path.dirname(__file__), "../policy_behavior_cloning.pth")
 
 def parse_args():
     p = argparse.ArgumentParser(description="Run a trained policy in MuJoCo")
-    default_xml = os.path.join(os.path.dirname(__file__), "scenes", "point_robot_nav.xml")
+    default_xml = os.path.join(os.path.dirname(__file__), "../scenes", "point_robot_nav.xml")
     p.add_argument("--xml_path", type=str, default=default_xml, help="Path to MuJoCo XML")
-    p.add_argument("--policy_path", type=str, default="policy.pth", help="Path to saved policy weights")
+    p.add_argument("--policy_path", type=str, default=DEFAULT_POLICY_PATH, help="Path to saved policy weights")
     p.add_argument("--randomize_start", action="store_true", help="Randomize starting pose")
     p.add_argument("--debug_start", action="store_true", help="Debug starting pose")
     p.add_argument("--seed", type=int, default=123, help="RNG seed for randomized start")
