@@ -1,0 +1,70 @@
+Metadata-Version: 2.4
+Name: robot-learning-toolbox
+Version: 0.1.0
+Summary: Point robot navigation and imitation/RL experiments
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: torch
+Requires-Dist: numpy
+Requires-Dist: mujoco
+Requires-Dist: tqdm
+
+## Point Robot Imitation Learning
+
+This repository contains starter code for the **Spring 2026 Rutgers IEEE ML/AI Robot Learning Track**. You will implement and train a behavior cloning policy for a point robot, and visualize the underlying motion planner.
+
+### Setup
+
+- **Optional but recommended: Setup a virtual environment to manage your dependencies** 
+
+- **Clone and install dependencies** (into your base environment or virtual environment)
+
+```bash
+pip install -r requirements.txt
+```
+
+All experiments are assumed to be run from the repository root.
+
+### Quick Start: Visualize the RRT Planner
+
+- **Run the RRT core visualization**
+
+```bash
+python -m planner.rrt_core
+```
+
+This will launch a visualization of the RRT-based motion planner that generates expert trajectories for the point robot.
+
+### Behavior Cloning Implementation
+
+Your main learning task is to **implement a behavior cloning (BC) algorithm** in `train_behavior_cloning_policy.py`.
+
+- **Key entry point**
+  - Function: `train_BC_policy` in `train_behavior_cloning_policy.py`
+  - This function:
+    - Loads expert trajectories with `make_step_dataloaders`
+    - Trains a `Policy` using supervised learning on state-action pairs
+    - Tracks training/validation loss and returns the best-performing policy
+
+- **What you need to do**
+  - Replace the `# TODO: Implement the behavior cloning algorithm!` block with:
+    - An epoch loop over the dataset
+    - Forward passes of `policy` on states
+    - Loss computation with `loss_fn`
+    - Backpropagation and `optimizer.step()`
+    - Evaluation on the validation loader
+    - Early stopping / best-model tracking using `best_val_loss`, `best_policy`, and `best_val_epoch`
+
+- **Running BC training**
+
+```bash
+python train_behavior_cloning_policy.py
+```
+
+By default, this script will:
+- Initialize a `Policy`
+- Train it using trajectories stored under `data/...`
+- Save the best policy weights to `policy.pth`
+
+You can then load and deploy the trained policy with `run_policy.py` (once you are ready to test closed-loop performance).
+

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robot-learning-toolbox"
+version = "0.1.0"
+description = "Point robot navigation and imitation/RL experiments"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "torch",
+  "numpy",
+  "mujoco",
+  "tqdm",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["scripts*", "scripts.tests*", "tests*"]
+

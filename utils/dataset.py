@@ -105,6 +105,12 @@ class _ShardIndex:
 
 class StepDataset:
     def __init__(self, root: str, as_torch: bool = False, cache_shards: int = 2):
+        """
+        Step-level dataset backed entirely in memory.
+
+        All shard files are loaded eagerly so that training does not incur
+        on-demand disk or mmap overhead.
+        """
         self.root = root
         self.as_torch = as_torch
         self.shards_dir = os.path.join(root, "shards")
@@ -112,9 +118,15 @@ class StepDataset:
         self._indices: List[_ShardIndex] = []
         self._cumulative_steps: List[int] = []
         self._load_indices()
+
+        # Eagerly load all shard arrays into memory
         self._cache: Dict[str, Any] = {}
-        self._cache_order: List[str] = []
-        self._cache_limit = max(1, cache_shards)
+        for idx in self._indices:
+            with np.load(idx.path, allow_pickle=False) as z:
+                self._cache[idx.path] = {
+                    "states": z["states"],
+                    "actions": z["actions"],
+                }
 
     def _read_json(self, p: str) -> Dict[str, Any]:
         with open(p, "r") as f:
@@ -173,27 +185,8 @@ class StepDataset:
     #     return data
 
     def _load_shard(self, path: str):
-        if path in self._cache:
-            # update LRU
-            self._cache_order.remove(path)
-            self._cache_order.append(path)
-            return self._cache[path]
-
-        # IMPORTANT: load arrays once and cache actual ndarrays, not NpzFile
-        with np.load(path, allow_pickle=False) as z:
-            data = {
-                "states": z["states"],   # ndarray in RAM
-                "actions": z["actions"], # ndarray in RAM
-            }
-
-        self._cache[path] = data
-        self._cache_order.append(path)
-
-        if len(self._cache_order) > self._cache_limit:
-            old = self._cache_order.pop(0)
-            self._cache.pop(old, None)
-
-        return data
+        # All shards are loaded eagerly in __init__, so this is just a dict lookup.
+        return self._cache[path]
 
     def __getitem__(self, idx: int):
         if idx < 0 or idx >= len(self):
@@ -215,6 +208,12 @@ class StepDataset:
 
 class TrajectoryDataset:
     def __init__(self, root: str, as_torch: bool = False, cache_shards: int = 2):
+        """
+        Trajectory-level dataset backed entirely in memory.
+
+        All shard files are loaded eagerly so that iteration over full
+        trajectories does not incur on-demand disk or mmap overhead.
+        """
         self.root = root
         self.as_torch = as_torch
         self.shards_dir = os.path.join(root, "shards")
@@ -222,9 +221,15 @@ class TrajectoryDataset:
         self._indices: List[_ShardIndex] = []
         self._cumulative_trajs: List[int] = []
         self._load_indices()
+
+        # Eagerly load all shard arrays into memory
         self._cache: Dict[str, Any] = {}
-        self._cache_order: List[str] = []
-        self._cache_limit = max(1, cache_shards)
+        for idx in self._indices:
+            with np.load(idx.path, allow_pickle=False) as z:
+                self._cache[idx.path] = {
+                    "states": z["states"],
+                    "actions": z["actions"],
+                }
 
     def _read_json(self, p: str) -> Dict[str, Any]:
         with open(p, "r") as f:
@@ -265,20 +270,8 @@ class TrajectoryDataset:
         return si, idx - prev_total
 
     def _load_shard(self, path: str):
-        if path in self._cache:
-            self._cache_order.remove(path)
-            self._cache_order.append(path)
-            return self._cache[path]
-        data = np.load(path, allow_pickle=False, mmap_mode="r")
-        self._cache[path] = data
-        self._cache_order.append(path)
-        if len(self._cache_order) > self._cache_limit:
-            old = self._cache_order.pop(0)
-            try:
-                self._cache.pop(old, None)
-            except Exception:
-                pass
-        return data
+        # All shards are loaded eagerly in __init__, so this is just a dict lookup.
+        return self._cache[path]
 
     def __getitem__(self, idx: int):
         if idx < 0 or idx >= len(self):
