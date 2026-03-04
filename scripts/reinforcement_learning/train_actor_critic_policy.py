@@ -1,7 +1,5 @@
 import argparse
 
-import mujoco
-
 from training.rl import train_actor_critic_policy
 
 
@@ -10,7 +8,7 @@ def parse_args():
         description="Train an actor-critic policy for the point robot."
     )
     parser.add_argument(
-        "--disable-real-time",
+        "--headless",
         action="store_true",
         default=False,
         help="Disable real-time visualization and viewer sync (default: False).",
@@ -33,17 +31,30 @@ def parse_args():
         default=None,
         help="Path to critic state dict to load (optional).",
     )
+    parser.add_argument(
+        "--scene-path",
+        type=str,
+        default='./scenes/point_robot_nav.xml',
+        help="Path to scene XML file.",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    m = mujoco.MjModel.from_xml_path('./scenes/point_robot_nav.xml')
+
+    if not args.headless:
+        import mujoco
+    else:
+        import mujoco.egl
+        
+    scene_path = args.scene_path
+    m = mujoco.MjModel.from_xml_path(scene_path)
     d = mujoco.MjData(m)
     train_actor_critic_policy(
         m,
         d,
-        enable_real_time=not args.disable_real_time,
+        enable_real_time=not args.headless,
         enable_execution_noise=args.enable_execution_noise,
         actor_path=args.actor_path,
         critic_path=args.critic_path,
