@@ -139,13 +139,13 @@ def _collect_rollouts(
     full_data = None
     for ep in range(episode_count):
         mujoco.mj_resetData(m, d)
-        if real_time:
+        if real_time and viewer is not None:
             viewer.sync()
         for step in range(episode_length):
             _, state = _state_from_sim(d, qi, vi)
             action, _ = actor.sample_action(state, noise=(not real_time))
             take_action(m, d, np.asarray(action), enable_execution_noise=enable_execution_noise)
-            if real_time:
+            if real_time and viewer is not None:
                 viewer.sync()
                 time.sleep(m.opt.timestep * 2.0)
             next_state_np, next_state = _state_from_sim(d, qi, vi)
@@ -198,6 +198,7 @@ def train_actor_critic_policy(
     enable_execution_noise: bool = False,
     actor_path: str | None = None,
     critic_path: str | None = None,
+    use_viewer: bool = True,
 ):
     actor = Actor(state_dim, action_dim)
     critic = Critic(state_dim)
@@ -214,7 +215,13 @@ def train_actor_critic_policy(
 
     qi = get_qpos_indices(m)
     vi = get_qvel_indices(m)
-    viewer = mujoco.viewer.launch_passive(m, d)
+    viewer = None
+    if use_viewer and enable_real_time:
+        try:
+            viewer = mujoco.viewer.launch_passive(m, d)
+        except Exception as e:
+            print(f"Viewer unavailable, continuing headless: {e}")
+            viewer = None
 
     total_num_episodes = []
     avg_rewards = []
@@ -225,7 +232,7 @@ def train_actor_critic_policy(
     )
 
     for data_collect_it in update_iterable:
-        real_time = enable_real_time and (data_collect_it % 3 == 0)
+        real_time = enable_real_time and (viewer is not None) and (data_collect_it % 3 == 0)
         full_data, sum_rewards = _collect_rollouts(
             m, d, actor, qi, vi, episode_count, episode_length,
             real_time, viewer, enable_execution_noise,
