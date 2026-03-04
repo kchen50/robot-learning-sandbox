@@ -102,6 +102,12 @@ def update_networks(
     critic_optimizer,
     gamma,
 ):
+    # Ensure tensors are on the same device as the networks
+    dev = next(actor.parameters()).device
+    state = state.to(dev)
+    action = action.to(dev)
+    reward = reward.to(dev)
+    next_state = next_state.to(dev)
     with torch.no_grad():
         next_value = critic(next_state)
     value = critic(state)
@@ -123,16 +129,16 @@ def update_networks(
     return actor_loss.item(), critic_loss.item()
 
 
-def _state_from_sim(d, qi, vi):
+def _state_from_sim(d, qi, vi, device: torch.device):
     pose = get_qpos_values(d, qi)
     vel = get_qvel_values(d, vi)
     state_np = np.concatenate((pose, vel), axis=0).astype(np.float32)
-    state = torch.from_numpy(state_np).unsqueeze(0)
+    state = torch.from_numpy(state_np).unsqueeze(0).to(device)
     return state_np, state
 
 
 def _collect_rollouts(
-    m, d, actor, qi, vi, episode_count, episode_length,
+    m, d, actor, qi, vi, device, episode_count, episode_length,
     real_time, viewer, enable_execution_noise,
 ):
     sum_rewards = 0
@@ -142,14 +148,14 @@ def _collect_rollouts(
         if real_time and viewer is not None:
             viewer.sync()
         for step in range(episode_length):
-            _, state = _state_from_sim(d, qi, vi)
+            _, state = _state_from_sim(d, qi, vi, device)
             action, _ = actor.sample_action(state, noise=(not real_time))
-            take_action(m, d, np.asarray(action), enable_execution_noise=enable_execution_noise)
+            take_action(m, d, action.cpu(), enable_execution_noise=enable_execution_noise)
             if real_time and viewer is not None:
                 viewer.sync()
                 time.sleep(m.opt.timestep * 2.0)
-            next_state_np, next_state = _state_from_sim(d, qi, vi)
-            reward = reward_function(next_state_np)
+            next_state_np, next_state = _state_from_sim(d, qi, vi, device)
+            reward = reward_function(next_state_np).to(device)
             action = action.unsqueeze(0)
             if step == 0:
                 episode_data = RLDataset(state, action, reward, next_state)
@@ -200,15 +206,18 @@ def train_actor_critic_policy(
     critic_path: str | None = None,
     use_viewer: bool = True,
 ):
-    actor = Actor(state_dim, action_dim)
-    critic = Critic(state_dim)
+    # Choose device: GPU if available, otherwise CPU
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    actor = Actor(state_dim, action_dim).to(device)
+    critic = Critic(state_dim).to(device)
     if actor_path is not None:
         actor.load_state_dict(
-            torch.load(actor_path, map_location="cpu", weights_only=True)
+            torch.load(actor_path, map_location=device, weights_only=True)
         )
     if critic_path is not None:
         critic.load_state_dict(
-            torch.load(critic_path, map_location="cpu", weights_only=True)
+            torch.load(critic_path, map_location=device, weights_only=True)
         )
     actor_optimizer = optim.Adam(actor.parameters(), lr=lr)
     critic_optimizer = optim.Adam(critic.parameters(), lr=lr)
@@ -234,7 +243,7 @@ def train_actor_critic_policy(
     for data_collect_it in update_iterable:
         real_time = enable_real_time and (viewer is not None) and (data_collect_it % 3 == 0)
         full_data, sum_rewards = _collect_rollouts(
-            m, d, actor, qi, vi, episode_count, episode_length,
+            m, d, actor, qi, vi, device, episode_count, episode_length,
             real_time, viewer, enable_execution_noise,
         )
         actor_loss, critic_loss = _train_on_batches(

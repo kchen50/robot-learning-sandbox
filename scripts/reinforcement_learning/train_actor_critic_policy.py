@@ -1,6 +1,6 @@
 import argparse
 
-from training.rl import train_actor_critic_policy
+from training.a2c import train_actor_critic_policy
 
 
 def parse_args():
